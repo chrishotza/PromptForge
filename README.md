@@ -209,6 +209,16 @@ T003 demonstrates a reduction from 85 to 48 serialized characters (43.5%) while 
 
 Provider adapters are experimental infrastructure. They are not required by the core agent API.
 
+### Provider outcome integrity
+
+A normalized `MODEL_OK` now requires an explicit success status and nonempty
+text; an exception, timeout, unknown status or provider-reported error never
+counts as successful merely because a response contains text. Token counts are
+bounded to nonnegative integers and nonfinite timing values are rejected or
+normalized to zero. These checks run offline without contacting providers.
+They protect experiment accounting but do **not** prove the quality of a model
+answer, reliability of provider uptime or accuracy of historical scores.
+
 ## Research surface
 
 The public release retains the V0.9.3 size-matched control: 4 context variants, 4 conditions, 15 repetitions per variant/condition, and 240 scheduled runs.
