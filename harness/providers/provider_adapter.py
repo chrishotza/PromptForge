@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any
 
 
@@ -54,9 +55,9 @@ class NormalizedProviderResult:
         ):
             value = getattr(self, field_name)
 
-            if not isinstance(value, int):
+            if type(value) is not int:
                 raise TypeError(
-                    f"{field_name} must be int"
+                    f"{field_name} must be int (not bool)"
                 )
 
             if value < 0:
@@ -64,9 +65,9 @@ class NormalizedProviderResult:
                     f"{field_name} must be >= 0"
                 )
 
-        if self.latency_ms < 0:
+        if not isfinite(self.latency_ms) or self.latency_ms < 0:
             raise ValueError(
-                "latency_ms must be >= 0"
+                "latency_ms must be finite and >= 0"
             )
 
         if not isinstance(self.raw_text, str):
@@ -122,30 +123,19 @@ def normalize_status(
     raw_text: str,
     error: str | None,
 ) -> str:
+    """Provider failures never become successes merely because text exists.
 
+    Adapters must explicitly assert MODEL_OK; unknown / timeout / error
+    statuses fail closed even if an SDK provides partial or stale output.
+    """
     text = raw_text.strip()
-
-    if raw_status == "MODEL_OK":
-        return (
-            "MODEL_OK"
-            if text
-            else "EMPTY_OUTPUT"
-        )
-
-    if raw_status in (
-        "EMPTY_OUTPUT",
-        "OUTPUT_EMPTY",
-    ):
-        return "EMPTY_OUTPUT"
-
     if error is not None:
         return "ERROR"
-
-    if text:
-        return "MODEL_OK"
-
+    if raw_status == "MODEL_OK":
+        return "MODEL_OK" if text else "EMPTY_OUTPUT"
+    if raw_status in ("EMPTY_OUTPUT", "OUTPUT_EMPTY"):
+        return "EMPTY_OUTPUT" if not text else "ERROR"
     return "ERROR"
-
 
 def normalize_error(
     error: Any,
@@ -163,9 +153,11 @@ def normalize_int(
     value: Any,
 ) -> int:
 
+    if isinstance(value, bool):
+        return 0
     try:
         return max(0, int(value or 0))
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -174,8 +166,9 @@ def normalize_float(
 ) -> float:
 
     try:
-        return max(0.0, float(value or 0.0))
-    except Exception:
+        parsed = float(value or 0.0)
+        return parsed if isfinite(parsed) and parsed >= 0.0 else 0.0
+    except (TypeError, ValueError, OverflowError):
         return 0.0
 
 
